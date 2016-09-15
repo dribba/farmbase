@@ -1,1 +1,11 @@
 elm-stuff
+backend/public/javascripts/build
+node_modules
+logs
+target
+backend/.idea
+backend/.idea_modules
+backend/.classpath
+backend/.project
+backend/.settings
+backend/RUNNING_PID

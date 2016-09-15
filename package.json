@@ -1,0 +1,15 @@
+{
+  "name": "farmbase",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "dependencies": {
+    "watch": "^0.19.2"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "start": "watch 'elm-make src/Main.elm --output=backend/public/javascripts/build/main.js' src"
+  },
+  "author": "",
+  "license": "ISC"
+}
