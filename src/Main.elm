@@ -1,9 +1,11 @@
 module Main exposing (..)
 
-import Html exposing (Html, form, button, div, text, label, input, legend)
+import Html exposing (Html, form, button, div, text, label, input, legend, table, th, tr, td, thead, tbody)
 import Html.App as App
 import Html.Events exposing (onInput, onDoubleClick)
 import Html.Attributes exposing (..)
+import Utils.MaybeUtils exposing (or)
+import Utils.DateUtils exposing (formatDate)
 import Date exposing (Date, Month)
 import Task
 
@@ -72,70 +74,6 @@ now =
     Task.perform (always (Germinated Nothing)) (formatDate >> Just >> Germinated) Date.now
 
 
-toMonthNumber : Month -> Int
-toMonthNumber month =
-    case month of
-        Date.Jan ->
-            1
-
-        Date.Feb ->
-            2
-
-        Date.Mar ->
-            3
-
-        Date.Apr ->
-            4
-
-        Date.May ->
-            5
-
-        Date.Jun ->
-            6
-
-        Date.Jul ->
-            7
-
-        Date.Aug ->
-            8
-
-        Date.Sep ->
-            9
-
-        Date.Oct ->
-            10
-
-        Date.Nov ->
-            11
-
-        Date.Dec ->
-            12
-
-
-formatNumber : Int -> String
-formatNumber number =
-    (if number < 10 then
-        "0"
-     else
-        ""
-    )
-        ++ toString number
-
-
-formatDate date =
-    let
-        year =
-            date |> Date.year |> toString
-
-        month =
-            date |> Date.month |> toMonthNumber |> formatNumber
-
-        day =
-            date |> Date.day |> formatNumber
-    in
-        year ++ "-" ++ month ++ "-" ++ day
-
-
 defaultDate model =
     model.crop.germinated
         |> Maybe.map formatDate
@@ -144,7 +82,7 @@ defaultDate model =
 
 addCropForm : Model -> Html Msg
 addCropForm model =
-    Html.form [ class "pure-form pure-form-stacked" ]
+    Html.form [ class "pure-form pure-form-stacked pure-u-11-12" ]
         [ legend [] [ text "Add Crop" ]
         , div []
             [ label [] [ text "Name" ]
@@ -156,15 +94,74 @@ addCropForm model =
             ]
         , div []
             [ label [] [ text "Date" ]
-            , input [ onDoubleClick Now, title "Double click to use today's date", type' "text", value (Maybe.withDefault "" model.germinatedValue), onInput (Just >> Germinated) ] []
+            , input
+                [ onDoubleClick Now
+                , title "Double click to use today's date"
+                , type' "text"
+                , value (model.germinatedValue `or` "")
+                , onInput (Just >> Germinated)
+                ]
+                []
             ]
         , button [ type' "submit", class "pure-button pure-button-primary" ] [ text "Create" ]
         ]
 
 
+debug =
+    True
+
+
+listHeader =
+    thead []
+        [ tr []
+            [ th [] [ text "Name" ]
+            , th [] [ text "Variety" ]
+            , th [] [ text "Planted" ]
+            ]
+        ]
+
+
+listRow name variety planted =
+    tr []
+        [ td [] [ text name ]
+        , td [] [ text variety ]
+        , td [] [ text planted ]
+        ]
+
+
 view : Model -> Html Msg
 view model =
-    div [ class "mui-panel mui-container" ]
-        [ addCropForm model
-        , div [] [ text (toString model) ]
+    div [ id "main" ]
+        -- content
+        [ div [ class "pure-g" ]
+            [ div [ class "pure-u-1-12" ] []
+            , div [ class "pure-u-1-3" ]
+                [ table [ class "pure-table pure-table-horizontal" ]
+                    [ listHeader
+                    , tbody []
+                        [ listRow "Lettuce" "Grand Rapids" "2016-10-05"
+                        , listRow "Lettuce" "Grand Rapids" "2016-10-05"
+                        , listRow "Lettuce" "Grand Rapids" "2016-10-05"
+                        , listRow "Lettuce" "Grand Rapids" "2016-10-05"
+                        , listRow "Lettuce" "Grand Rapids" "2016-10-05"
+                        ]
+                    ]
+                ]
+            , div [ class "pure-u-1-12" ] []
+            , div [ class "pure-u-1-3 add-panel" ]
+                [ div [ class "pure-u-1-12" ] []
+                , div [ class "pure-u-11-12" ]
+                    [ addCropForm model
+                    ]
+                ]
+            ]
+          -- debug model info
+        , div []
+            [ text
+                (if debug then
+                    ""
+                 else
+                    toString model
+                )
+            ]
         ]
