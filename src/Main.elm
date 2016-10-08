@@ -14,10 +14,11 @@ main =
     App.program { init = model, view = view, update = update, subscriptions = \_ -> Sub.none }
 
 
-type alias Crop =
+type alias NewCrop =
     { name : String
     , variety : String
     , germinated : Maybe Date
+    , germinatedValue : Maybe String
     }
 
 
@@ -29,38 +30,39 @@ type Msg
 
 
 type alias Model =
-    { crop : Crop
-    , germinatedValue : Maybe String
+    { newCrop : NewCrop
     }
 
 
 model : ( Model, Cmd Msg )
 model =
-    ( Model (Crop "" "" Nothing) Nothing, now )
+    ( Model (NewCrop "" "" Nothing Nothing), now )
 
 
-updateCrop : (Crop -> Crop) -> Model -> Model
+updateCrop : (NewCrop -> NewCrop) -> Model -> Model
 updateCrop update model =
-    { model | crop = update model.crop }
+    { model | newCrop = update model.newCrop }
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case (Debug.log "msg" msg) of
         Name name ->
-            ( updateCrop (\crop -> { crop | name = name }) model, Cmd.none )
+            ( updateCrop (\newCrop -> { newCrop | name = name }) model, Cmd.none )
 
         Variety variety ->
-            ( updateCrop (\crop -> { crop | variety = variety }) model, Cmd.none )
+            ( updateCrop (\newCrop -> { newCrop | variety = variety }) model, Cmd.none )
 
         Germinated germinated ->
             let
-                crop =
-                    model.crop
+                newCrop =
+                    model.newCrop
             in
-                ( { model
-                    | crop = { crop | germinated = germinated `Maybe.andThen` (Date.fromString >> Result.toMaybe) }
-                    , germinatedValue = germinated
+                ( { model | newCrop =
+                        { newCrop
+                            | germinated = germinated `Maybe.andThen` parseDate
+                            , germinatedValue = germinated
+                        }
                   }
                 , Cmd.none
                 )
@@ -69,13 +71,17 @@ update msg model =
             ( model, now )
 
 
+parseDate : String -> Maybe Date
+parseDate =
+  Date.fromString >> Result.toMaybe
+
 now : Cmd Msg
 now =
     Task.perform (always (Germinated Nothing)) (formatDate >> Just >> Germinated) Date.now
 
 
 defaultDate model =
-    model.crop.germinated
+    model.newCrop.germinated
         |> Maybe.map formatDate
         |> Maybe.withDefault ""
 
@@ -98,7 +104,7 @@ addCropForm model =
                 [ onDoubleClick Now
                 , title "Double click to use today's date"
                 , type' "text"
-                , value (model.germinatedValue `or` "")
+                , value (model.newCrop.germinatedValue `or` "")
                 , onInput (Just >> Germinated)
                 ]
                 []
