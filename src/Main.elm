@@ -4,10 +4,10 @@ import Html exposing (Html, form, button, div, text, label, input, legend, table
 import Html.App as App
 import Html.Events exposing (onInput, onDoubleClick)
 import Html.Attributes exposing (..)
-import Utils.MaybeUtils exposing (or)
 import Utils.DateUtils exposing (formatDate)
 import Date exposing (Date, Month)
 import Task
+import Platform.Cmd exposing (Cmd, (!))
 
 
 main =
@@ -17,15 +17,16 @@ main =
 type alias NewCrop =
     { name : String
     , variety : String
-    , germinated : Maybe Date
-    , germinatedValue : Maybe String
+    , planted : Maybe Date
+    , plantedValue : Maybe String
     }
 
 
 type Msg
     = Name String
     | Variety String
-    | Germinated (Maybe String)
+    | Planted (Maybe Date)
+    | PlantedValue (Maybe String)
     | Now
 
 
@@ -48,24 +49,32 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case (Debug.log "msg" msg) of
         Name name ->
-            ( updateCrop (\newCrop -> { newCrop | name = name }) model, Cmd.none )
+            updateCrop (\newCrop -> { newCrop | name = name }) model ! []
 
         Variety variety ->
-            ( updateCrop (\newCrop -> { newCrop | variety = variety }) model, Cmd.none )
+            updateCrop (\newCrop -> { newCrop | variety = variety }) model ! []
 
-        Germinated germinated ->
-            let
-                newCrop =
-                    model.newCrop
-            in
-                ( { model | newCrop =
-                        { newCrop
-                            | germinated = germinated `Maybe.andThen` parseDate
-                            , germinatedValue = germinated
-                        }
-                  }
-                , Cmd.none
+        PlantedValue plantedValue ->
+            updateCrop
+                (\newCrop ->
+                    { newCrop
+                        | plantedValue = plantedValue
+                        , planted = plantedValue `Maybe.andThen` parseDate
+                    }
                 )
+                model
+                ! []
+
+        Planted planted ->
+            updateCrop
+                (\newCrop ->
+                    { newCrop
+                        | plantedValue = Maybe.map formatDate planted
+                        , planted = planted
+                    }
+                )
+                model
+                ! []
 
         Now ->
             ( model, now )
@@ -73,16 +82,22 @@ update msg model =
 
 parseDate : String -> Maybe Date
 parseDate =
-  Date.fromString >> Result.toMaybe
+    Date.fromString >> Result.toMaybe
+
+
+sendMessage : a -> Cmd a
+sendMessage msg =
+    msg |> Task.succeed |> Task.perform (always msg) identity
+
 
 now : Cmd Msg
 now =
-    Task.perform (always (Germinated Nothing)) (formatDate >> Just >> Germinated) Date.now
+    Task.perform (always (Planted Nothing)) (Just >> Planted) Date.now
 
 
-defaultDate model =
-    model.newCrop.germinated
-        |> Maybe.map formatDate
+plantedDate : Model -> String
+plantedDate model =
+    Maybe.oneOf [ model.newCrop.plantedValue, (Maybe.map formatDate model.newCrop.planted) ]
         |> Maybe.withDefault ""
 
 
@@ -104,8 +119,8 @@ addCropForm model =
                 [ onDoubleClick Now
                 , title "Double click to use today's date"
                 , type' "text"
-                , value (model.newCrop.germinatedValue `or` "")
-                , onInput (Just >> Germinated)
+                , value (plantedDate model)
+                , onInput (Just >> PlantedValue)
                 ]
                 []
             ]
