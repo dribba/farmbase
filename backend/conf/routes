@@ -7,6 +7,7 @@ GET     /                           controllers.Assets.at(path="/public/static",
 
 GET     /api/v1/crops               controllers.Crops.get
 POST    /api/v1/crops               controllers.Crops.add
+PUT     /api/v1/crops/:id           controllers.Crops.edit(id)
 DELETE  /api/v1/crops/:id           controllers.Crops.remove(id)
 
 # Map static resources from the /public folder to the /assets URL path

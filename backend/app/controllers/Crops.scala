@@ -50,13 +50,12 @@ class Crops extends Controller {
 
   private val cropReads = (
     (__ \ "name").read[String] and
-    (__ \ "variety").read[String] and
-    (__ \ "planted").read[DateTime]
-  ).tupled
+      (__ \ "variety").read[String] and
+      (__ \ "planted").read[DateTime]
+    ).tupled
 
-  private def createCrop(name: String, variety: String, planted: DateTime): Document =
+  private def crop(name: String, variety: String, planted: DateTime): Document =
     Document(
-      "_id" -> ObjectId.get(),
       "name" -> name,
       "variety" -> variety,
       "planted" -> planted.toDate
@@ -65,9 +64,23 @@ class Crops extends Controller {
   def add = Action.async(parse.json(2 * 1024)) { request =>
     cropReads.reads(request.body) match {
       case JsSuccess((name, variety, planted), _) =>
-        val doc = createCrop(name, variety, planted)
+        val doc = crop(name, variety, planted) + ("_id" -> ObjectId.get())
         collection.insertOne(doc).toFuture().map(_ => {
           Created(toJson(doc))
+        })
+
+      case JsError(_) =>
+        Future.successful(BadRequest("Invalid request"))
+    }
+  }
+
+  def edit(id: String) = Action.async(parse.json(2 * 1024)) { request =>
+    cropReads.reads(request.body) match {
+      case JsSuccess((name, variety, planted), _) =>
+        val doc = crop(name, variety, planted)
+        def withId = Document("_id" -> new ObjectId(id))
+        collection.replaceOne(withId, doc).toFuture().map(_ => {
+          Accepted(toJson(doc ++ withId))
         })
 
       case JsError(_) =>

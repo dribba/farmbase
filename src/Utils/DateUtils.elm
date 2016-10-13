@@ -1,6 +1,8 @@
-module Utils.DateUtils exposing (formatDate)
+module Utils.DateUtils exposing (formatDate, decodeDate)
 
 import Date exposing (..)
+import Json.Decode exposing (Decoder)
+import Json.Decode as Decoder
 
 toMonthNumber : Month -> Int
 toMonthNumber month =
@@ -67,3 +69,7 @@ formatDate date =
             date |> Date.day |> asTwoDigits
     in
         year ++ "-" ++ month ++ "-" ++ day
+
+decodeDate : Decoder (Maybe Date)
+decodeDate =
+    Decoder.map (Date.fromString >> Result.toMaybe) Decoder.string

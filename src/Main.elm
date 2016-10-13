@@ -2,24 +2,51 @@ module Main exposing (..)
 
 import Html exposing (Html, form, button, div, text, label, input, legend, table, th, tr, td, thead, tbody)
 import Html.App as App
-import Html.Events exposing (onInput, onDoubleClick)
+import Html.Events exposing (onInput, onClick, onDoubleClick, onSubmit)
 import Html.Attributes exposing (..)
-import Utils.DateUtils exposing (formatDate)
+import Utils.MaybeUtils exposing (or)
+import Utils.DateUtils exposing (formatDate, decodeDate)
 import Date exposing (Date, Month)
-import Task
+import Task exposing (Task)
 import Platform.Cmd exposing (Cmd, (!))
+import Http exposing (Error)
+import Json.Encode exposing (Value)
+import Json.Encode as Encode
+import Json.Decode exposing (Decoder, (:=))
+import Json.Decode as Decode
 
 
 main =
     App.program { init = model, view = view, update = update, subscriptions = \_ -> Sub.none }
 
 
-type alias NewCrop =
+type AsyncData b a
+    = Empty
+    | Loading
+    | Success a
+    | Error b
+
+
+type alias Crop =
+    { id : String
+    , name : String
+    , variety : String
+    , planted : Maybe Date
+    }
+
+
+type alias CropForm =
     { name : String
     , variety : String
     , planted : Maybe Date
     , plantedValue : Maybe String
+    , id : Maybe String
     }
+
+
+emptyCropForm : CropForm
+emptyCropForm =
+    CropForm "" "" Nothing Nothing Nothing
 
 
 type Msg
@@ -28,36 +55,48 @@ type Msg
     | Planted (Maybe Date)
     | PlantedValue (Maybe String)
     | Now
+    | RefreshCrops
+    | ReceiveCrops (List Crop)
+    | CropsError Error
+    | SaveCropForm
+    | CropSaved Crop
+    | CropSaveError Error
+    | RemoveCrop Crop
+    | CropRemoved
+    | CropRemoveError
+    | EditCrop Crop
+    | ResetCropForm
 
 
 type alias Model =
-    { newCrop : NewCrop
+    { cropForm : CropForm
+    , crops : AsyncData Error (List Crop)
     }
 
 
 model : ( Model, Cmd Msg )
 model =
-    ( Model (NewCrop "" "" Nothing Nothing), now )
+    Model emptyCropForm Empty ! [ now, sendMessage RefreshCrops ]
 
 
-updateCrop : (NewCrop -> NewCrop) -> Model -> Model
+updateCrop : (CropForm -> CropForm) -> Model -> Model
 updateCrop update model =
-    { model | newCrop = update model.newCrop }
+    { model | cropForm = update model.cropForm }
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case (Debug.log "msg" msg) of
         Name name ->
-            updateCrop (\newCrop -> { newCrop | name = name }) model ! []
+            updateCrop (\cropForm -> { cropForm | name = name }) model ! []
 
         Variety variety ->
-            updateCrop (\newCrop -> { newCrop | variety = variety }) model ! []
+            updateCrop (\cropForm -> { cropForm | variety = variety }) model ! []
 
         PlantedValue plantedValue ->
             updateCrop
-                (\newCrop ->
-                    { newCrop
+                (\cropForm ->
+                    { cropForm
                         | plantedValue = plantedValue
                         , planted = plantedValue `Maybe.andThen` parseDate
                     }
@@ -67,14 +106,53 @@ update msg model =
 
         Planted planted ->
             updateCrop
-                (\newCrop ->
-                    { newCrop
+                (\cropForm ->
+                    { cropForm
                         | plantedValue = Maybe.map formatDate planted
                         , planted = planted
                     }
                 )
                 model
                 ! []
+
+        SaveCropForm ->
+            model
+                ! [ (if model.cropForm.id == Nothing then
+                        createCrop model.cropForm
+                     else
+                        saveCrop model.cropForm
+                    )
+                  ]
+
+        CropSaved crop ->
+            model ! [ sendMessage RefreshCrops, sendMessage ResetCropForm ]
+
+        CropSaveError error ->
+            model ! []
+
+        ReceiveCrops crops ->
+            { model | crops = Success crops } ! []
+
+        CropsError error ->
+            { model | crops = Error error } ! []
+
+        RemoveCrop crop ->
+            model ! [ deleteCrop crop ]
+
+        CropRemoved ->
+            model ! [ sendMessage RefreshCrops ]
+
+        CropRemoveError ->
+            model ! []
+
+        EditCrop crop ->
+            { model | cropForm = CropForm crop.name crop.variety crop.planted Nothing (Just crop.id) } ! []
+
+        ResetCropForm ->
+            { model | cropForm = emptyCropForm } ! [ sendMessage Now ]
+
+        RefreshCrops ->
+            { model | crops = Loading } ! [ getCrops ]
 
         Now ->
             ( model, now )
@@ -95,37 +173,152 @@ now =
     Task.perform (always (Planted Nothing)) (Just >> Planted) Date.now
 
 
-plantedDate : Model -> String
-plantedDate model =
-    Maybe.oneOf [ model.newCrop.plantedValue, (Maybe.map formatDate model.newCrop.planted) ]
+decodeCrop : Decoder Crop
+decodeCrop =
+    Decode.object4 Crop
+        ("_id" := Decode.string)
+        ("name" := Decode.string)
+        ("variety" := Decode.string)
+        ("planted" := decodeDate)
+
+
+encodeNewCrop : CropForm -> Value
+encodeNewCrop cropForm =
+    Encode.object
+        [ ( "name", Encode.string cropForm.name )
+        , ( "variety", Encode.string cropForm.variety )
+        , ( "planted", Encode.string ((Maybe.map formatDate cropForm.planted) `or` "") )
+        ]
+
+
+getCrops : Cmd Msg
+getCrops =
+    let
+        url =
+            "http://localhost:9000/api/v1/crops"
+    in
+        Task.perform CropsError ReceiveCrops (Http.get (Decode.list decodeCrop) url)
+
+
+postJson : Decoder value -> String -> Value -> Task Error value
+postJson decoder url body =
+    let
+        request =
+            { verb = "POST"
+            , headers = [ ( "Content-Type", "application/json" ) ]
+            , url = url
+            , body = Http.string (Encode.encode 0 body)
+            }
+    in
+        Http.fromJson decoder (Http.send Http.defaultSettings request)
+
+
+putJson : Decoder value -> String -> Value -> Task Error value
+putJson decoder url body =
+    let
+        request =
+            { verb = "PUT"
+            , headers = [ ( "Content-Type", "application/json" ) ]
+            , url = url
+            , body = Http.string (Encode.encode 0 body)
+            }
+    in
+        Http.fromJson decoder (Http.send Http.defaultSettings request)
+
+
+httpDelete : Decoder value -> String -> Task Error value
+httpDelete decoder url =
+    let
+        request =
+            { verb = "DELETE"
+            , headers = []
+            , url = url
+            , body = Http.empty
+            }
+    in
+        Http.fromJson decoder (Http.send Http.defaultSettings request)
+
+
+createCrop : CropForm -> Cmd Msg
+createCrop cropForm =
+    let
+        url =
+            "http://localhost:9000/api/v1/crops"
+    in
+        Task.perform CropSaveError CropSaved (postJson decodeCrop url (cropForm |> encodeNewCrop))
+
+
+saveCrop : CropForm -> Cmd Msg
+saveCrop cropForm =
+    let
+        url =
+            "http://localhost:9000/api/v1/crops/" ++ (cropForm.id `or` "")
+    in
+        Task.perform CropSaveError CropSaved (putJson decodeCrop url (cropForm |> encodeNewCrop))
+
+
+deleteCrop : Crop -> Cmd Msg
+deleteCrop crop =
+    let
+        url =
+            "http://localhost:9000/api/v1/crops/" ++ crop.id
+    in
+        Task.perform (always CropRemoveError) (always CropRemoved) (httpDelete (Decode.succeed "") url)
+
+
+plantedDate : CropForm -> String
+plantedDate cropForm =
+    Maybe.oneOf [ cropForm.plantedValue, (Maybe.map formatDate cropForm.planted) ]
         |> Maybe.withDefault ""
 
 
-addCropForm : Model -> Html Msg
-addCropForm model =
-    Html.form [ class "pure-form pure-form-stacked pure-u-11-12" ]
-        [ legend [] [ text "Add Crop" ]
-        , div []
-            [ label [] [ text "Name" ]
-            , input [ type' "text", placeholder "Lettuce", onInput Name ] []
+cropFormView : CropForm -> Html Msg
+cropFormView cropForm =
+    let
+        isEdit =
+            cropForm.id /= Nothing
+
+        createButton =
+            [ button [ type' "submit", class "pure-button pure-button-primary pure-u-1-4" ] [ text "Create" ]
+            , text " "
+            , button [ type' "button", class "pure-button pure-button-primary pure-u-1-4", onClick ResetCropForm ] [ text "Reset" ]
             ]
-        , div []
-            [ label [] [ text "Variety" ]
-            , input [ type' "text", placeholder "Grand Rapids", onInput Variety ] []
+
+        saveAndCancelButtons =
+            [ button [ type' "submit", class "pure-button pure-button-primary pure-u-1-4" ] [ text "Save" ]
+            , text " "
+            , button [ type' "button", class "pure-button pure-button-primary pure-u-1-4", onClick ResetCropForm ] [ text "Cancel" ]
             ]
-        , div []
-            [ label [] [ text "Date" ]
-            , input
-                [ onDoubleClick Now
-                , title "Double click to use today's date"
-                , type' "text"
-                , value (plantedDate model)
-                , onInput (Just >> PlantedValue)
+    in
+        Html.form [ class "pure-form pure-form-stacked pure-u-11-12", onSubmit SaveCropForm ]
+            [ legend [] [ text "Add Crop" ]
+            , div []
+                [ label [] [ text "Name" ]
+                , input [ type' "text", class "pure-u-1-2", value cropForm.name, placeholder "Lettuce", onInput Name ] []
                 ]
-                []
+            , div []
+                [ label [] [ text "Variety" ]
+                , input [ type' "text", class "pure-u-1-2", value cropForm.variety, placeholder "Grand Rapids", onInput Variety ] []
+                ]
+            , div []
+                [ label [] [ text "Date" ]
+                , input
+                    [ onDoubleClick Now
+                    , title "Double click to use today's date"
+                    , type' "text"
+                    , class "pure-u-1-2"
+                    , value (plantedDate cropForm)
+                    , onInput (Just >> PlantedValue)
+                    ]
+                    []
+                ]
+            , div []
+                (if isEdit then
+                    saveAndCancelButtons
+                 else
+                    createButton
+                )
             ]
-        , button [ type' "submit", class "pure-button pure-button-primary" ] [ text "Create" ]
-        ]
 
 
 debug =
@@ -138,15 +331,31 @@ listHeader =
             [ th [] [ text "Name" ]
             , th [] [ text "Variety" ]
             , th [] [ text "Planted" ]
+            , th [] [ text "Actions" ]
             ]
         ]
 
 
-listRow name variety planted =
+listRow : Crop -> Html Msg
+listRow ({ name, variety, planted } as crop) =
     tr []
         [ td [] [ text name ]
         , td [] [ text variety ]
-        , td [] [ text planted ]
+        , td [] [ text ((Maybe.map formatDate planted) `or` "") ]
+        , td []
+            [ button [ title "Edit", onClick (EditCrop crop) ] [ text "🖊" ]
+            , button [ title "Delete", onClick (RemoveCrop crop) ] [ text "🔥" ]
+            ]
+        ]
+
+
+cropTable : List Crop -> Html Msg
+cropTable crops =
+    div []
+        [ table [ class "pure-table pure-table-horizontal" ]
+            [ listHeader
+            , tbody [] (List.map listRow crops)
+            ]
         ]
 
 
@@ -157,22 +366,26 @@ view model =
         [ div [ class "pure-g" ]
             [ div [ class "pure-u-1-12" ] []
             , div [ class "pure-u-1-3" ]
-                [ table [ class "pure-table pure-table-horizontal" ]
-                    [ listHeader
-                    , tbody []
-                        [ listRow "Lettuce" "Grand Rapids" "2016-10-05"
-                        , listRow "Lettuce" "Grand Rapids" "2016-10-05"
-                        , listRow "Lettuce" "Grand Rapids" "2016-10-05"
-                        , listRow "Lettuce" "Grand Rapids" "2016-10-05"
-                        , listRow "Lettuce" "Grand Rapids" "2016-10-05"
-                        ]
-                    ]
+                [ (case model.crops of
+                    Empty ->
+                        text "Loading..."
+
+                    Loading ->
+                        text "Loading..."
+
+                    Success crops ->
+                        cropTable crops
+
+                    Error e ->
+                        text "Oh no! There was an error :("
+                  )
+                , button [ title "Refresh", onClick RefreshCrops ] [ text "♻️" ]
                 ]
             , div [ class "pure-u-1-12" ] []
             , div [ class "pure-u-1-3 add-panel" ]
                 [ div [ class "pure-u-1-12" ] []
                 , div [ class "pure-u-11-12" ]
-                    [ addCropForm model
+                    [ cropFormView model.cropForm
                     ]
                 ]
             ]
@@ -180,9 +393,9 @@ view model =
         , div []
             [ text
                 (if debug then
-                    ""
-                 else
                     toString model
+                 else
+                    ""
                 )
             ]
         ]
