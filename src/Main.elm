@@ -1,7 +1,6 @@
 module Main exposing (..)
 
 import Html exposing (Html, form, button, div, text, label, input, legend, table, th, tr, td, thead, tbody)
-import Html.App as App
 import Html.Events exposing (onInput, onClick, onDoubleClick, onSubmit)
 import Html.Attributes exposing (..)
 import Utils.MaybeUtils exposing (or)
@@ -9,15 +8,15 @@ import Utils.DateUtils exposing (formatDate, decodeDate)
 import Date exposing (Date, Month)
 import Task exposing (Task)
 import Platform.Cmd exposing (Cmd, (!))
-import Http exposing (Error)
+import Http exposing (Error, Request)
 import Json.Encode exposing (Value)
 import Json.Encode as Encode
-import Json.Decode exposing (Decoder, (:=))
+import Json.Decode exposing (Decoder)
 import Json.Decode as Decode
 
 
 main =
-    App.program { init = model, view = view, update = update, subscriptions = \_ -> Sub.none }
+    Html.program { init = model, view = view, update = update, subscriptions = \_ -> Sub.none }
 
 
 type AsyncData b a
@@ -98,7 +97,7 @@ update msg model =
                 (\cropForm ->
                     { cropForm
                         | plantedValue = plantedValue
-                        , planted = plantedValue `Maybe.andThen` parseDate
+                        , planted = plantedValue |> Maybe.andThen parseDate
                     }
                 )
                 model
@@ -165,21 +164,21 @@ parseDate =
 
 sendMessage : a -> Cmd a
 sendMessage msg =
-    msg |> Task.succeed |> Task.perform (always msg) identity
+    msg |> Task.succeed |> Task.perform (always msg)
 
 
 now : Cmd Msg
 now =
-    Task.perform (always (Planted Nothing)) (Just >> Planted) Date.now
+    Task.perform (always (Planted Nothing)) (Task.map (Just >> Planted) Date.now)
 
 
 decodeCrop : Decoder Crop
 decodeCrop =
-    Decode.object4 Crop
-        ("_id" := Decode.string)
-        ("name" := Decode.string)
-        ("variety" := Decode.string)
-        ("planted" := decodeDate)
+    Decode.map4 Crop
+        (Decode.field "_id" Decode.string)
+        (Decode.field "name" Decode.string)
+        (Decode.field "variety" Decode.string)
+        (Decode.field "planted" decodeDate)
 
 
 encodeNewCrop : CropForm -> Value
@@ -187,9 +186,16 @@ encodeNewCrop cropForm =
     Encode.object
         [ ( "name", Encode.string cropForm.name )
         , ( "variety", Encode.string cropForm.variety )
-        , ( "planted", Encode.string ((Maybe.map formatDate cropForm.planted) `or` "") )
+        , ( "planted", Encode.string (or (Maybe.map formatDate cropForm.planted) "") )
         ]
 
+wrapResult : (Error -> b) -> (a -> b) -> Result Error a -> b
+wrapResult error success result = 
+    case result of
+      Ok value ->
+        success value
+      Err err ->
+        error err
 
 getCrops : Cmd Msg
 getCrops =
@@ -197,46 +203,46 @@ getCrops =
         url =
             "http://localhost:9000/api/v1/crops"
     in
-        Task.perform CropsError ReceiveCrops (Http.get (Decode.list decodeCrop) url)
+        Http.send (wrapResult CropsError ReceiveCrops) (Http.get url (Decode.list decodeCrop))
 
 
-postJson : Decoder value -> String -> Value -> Task Error value
+postJson : Decoder value -> String -> Value -> Request value
 postJson decoder url body =
-    let
-        request =
-            { verb = "POST"
-            , headers = [ ( "Content-Type", "application/json" ) ]
-            , url = url
-            , body = Http.string (Encode.encode 0 body)
-            }
-    in
-        Http.fromJson decoder (Http.send Http.defaultSettings request)
+    Http.request
+        { method = "POST"
+        , headers = [ Http.header "Content-Type" "application/json" ]
+        , url = url
+        , body = Http.jsonBody body
+        , expect = Http.expectJson decoder
+        , timeout = Nothing
+        , withCredentials = False
+        }
 
 
-putJson : Decoder value -> String -> Value -> Task Error value
+putJson : Decoder value -> String -> Value -> Request value
 putJson decoder url body =
-    let
-        request =
-            { verb = "PUT"
-            , headers = [ ( "Content-Type", "application/json" ) ]
-            , url = url
-            , body = Http.string (Encode.encode 0 body)
-            }
-    in
-        Http.fromJson decoder (Http.send Http.defaultSettings request)
+    Http.request
+        { method = "PUT"
+        , headers = [ Http.header "Content-Type" "application/json" ]
+        , url = url
+        , body = Http.jsonBody body
+        , expect = Http.expectJson decoder
+        , timeout = Nothing
+        , withCredentials = False
+        }
 
 
-httpDelete : Decoder value -> String -> Task Error value
+httpDelete : Decoder value -> String -> Request value
 httpDelete decoder url =
-    let
-        request =
-            { verb = "DELETE"
-            , headers = []
-            , url = url
-            , body = Http.empty
-            }
-    in
-        Http.fromJson decoder (Http.send Http.defaultSettings request)
+    Http.request
+        { method = "DELETE"
+        , headers = []
+        , url = url
+        , body = Http.emptyBody
+        , expect = Http.expectJson decoder
+        , timeout = Nothing
+        , withCredentials = False
+        }
 
 
 createCrop : CropForm -> Cmd Msg
@@ -245,16 +251,16 @@ createCrop cropForm =
         url =
             "http://localhost:9000/api/v1/crops"
     in
-        Task.perform CropSaveError CropSaved (postJson decodeCrop url (cropForm |> encodeNewCrop))
+        Http.send (wrapResult CropSaveError CropSaved) (postJson decodeCrop url (cropForm |> encodeNewCrop))
 
 
 saveCrop : CropForm -> Cmd Msg
 saveCrop cropForm =
     let
         url =
-            "http://localhost:9000/api/v1/crops/" ++ (cropForm.id `or` "")
+            "http://localhost:9000/api/v1/crops/" ++ (or cropForm.id "")
     in
-        Task.perform CropSaveError CropSaved (putJson decodeCrop url (cropForm |> encodeNewCrop))
+        Http.send (wrapResult CropSaveError CropSaved) (putJson decodeCrop url (cropForm |> encodeNewCrop))
 
 
 deleteCrop : Crop -> Cmd Msg
@@ -263,13 +269,15 @@ deleteCrop crop =
         url =
             "http://localhost:9000/api/v1/crops/" ++ crop.id
     in
-        Task.perform (always CropRemoveError) (always CropRemoved) (httpDelete (Decode.succeed "") url)
+        Http.send (wrapResult (always CropRemoveError) (always CropRemoved)) (httpDelete (Decode.succeed "") url)
 
 
 plantedDate : CropForm -> String
 plantedDate cropForm =
-    Maybe.oneOf [ cropForm.plantedValue, (Maybe.map formatDate cropForm.planted) ]
-        |> Maybe.withDefault ""
+     case (cropForm.plantedValue, (Maybe.map formatDate cropForm.planted)) of 
+        (Just date, _) -> date
+        (_, Just date) -> date
+        (_, _) -> ""
 
 
 cropFormView : CropForm -> Html Msg
@@ -279,33 +287,33 @@ cropFormView cropForm =
             cropForm.id /= Nothing
 
         createButton =
-            [ button [ type' "submit", class "pure-button pure-button-primary pure-u-1-4" ] [ text "Create" ]
+            [ button [ type_ "submit", class "pure-button pure-button-primary pure-u-1-4" ] [ text "Create" ]
             , text " "
-            , button [ type' "button", class "pure-button pure-button-primary pure-u-1-4", onClick ResetCropForm ] [ text "Reset" ]
+            , button [ type_ "button", class "pure-button pure-button-primary pure-u-1-4", onClick ResetCropForm ] [ text "Reset" ]
             ]
 
         saveAndCancelButtons =
-            [ button [ type' "submit", class "pure-button pure-button-primary pure-u-1-4" ] [ text "Save" ]
+            [ button [ type_ "submit", class "pure-button pure-button-primary pure-u-1-4" ] [ text "Save" ]
             , text " "
-            , button [ type' "button", class "pure-button pure-button-primary pure-u-1-4", onClick ResetCropForm ] [ text "Cancel" ]
+            , button [ type_ "button", class "pure-button pure-button-primary pure-u-1-4", onClick ResetCropForm ] [ text "Cancel" ]
             ]
     in
         Html.form [ class "pure-form pure-form-stacked pure-u-11-12", onSubmit SaveCropForm ]
             [ legend [] [ text "Add Crop" ]
             , div []
                 [ label [] [ text "Name" ]
-                , input [ type' "text", class "pure-u-1-2", value cropForm.name, placeholder "Lettuce", onInput Name ] []
+                , input [ type_ "text", class "pure-u-1-2", value cropForm.name, placeholder "Lettuce", onInput Name ] []
                 ]
             , div []
                 [ label [] [ text "Variety" ]
-                , input [ type' "text", class "pure-u-1-2", value cropForm.variety, placeholder "Grand Rapids", onInput Variety ] []
+                , input [ type_ "text", class "pure-u-1-2", value cropForm.variety, placeholder "Grand Rapids", onInput Variety ] []
                 ]
             , div []
                 [ label [] [ text "Date" ]
                 , input
                     [ onDoubleClick Now
                     , title "Double click to use today's date"
-                    , type' "text"
+                    , type_ "text"
                     , class "pure-u-1-2"
                     , value (plantedDate cropForm)
                     , onInput (Just >> PlantedValue)
@@ -341,7 +349,7 @@ listRow ({ name, variety, planted } as crop) =
     tr []
         [ td [] [ text name ]
         , td [] [ text variety ]
-        , td [] [ text ((Maybe.map formatDate planted) `or` "") ]
+        , td [] [ text (or (Maybe.map formatDate planted) "") ]
         , td []
             [ button [ title "Edit", onClick (EditCrop crop) ] [ text "🖊" ]
             , button [ title "Delete", onClick (RemoveCrop crop) ] [ text "🔥" ]
