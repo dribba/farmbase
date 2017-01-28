@@ -13,10 +13,25 @@ import Json.Encode exposing (Value)
 import Json.Encode as Encode
 import Json.Decode exposing (Decoder)
 import Json.Decode as Decode
+import Routing
+import MainView
+import Navigation exposing (Location)
+import Routing exposing (parseLocation)
 
 
+subscriptions : Model -> Sub Msg
+subscriptions model =
+    Sub.none
+
+
+main : Program Never Model Msg
 main =
-    Html.program { init = model, view = view, update = update, subscriptions = \_ -> Sub.none }
+    Navigation.program OnLocationChange
+        { init = model
+        , view = view
+        , update = update
+        , subscriptions = subscriptions
+        }
 
 
 type AsyncData b a
@@ -65,17 +80,23 @@ type Msg
     | CropRemoveError
     | EditCrop Crop
     | ResetCropForm
+    | OnLocationChange Location
 
 
 type alias Model =
     { cropForm : CropForm
     , crops : AsyncData Error (List Crop)
+    , route : Routing.Route
     }
 
 
-model : ( Model, Cmd Msg )
-model =
-    Model emptyCropForm Empty ! [ now, sendMessage RefreshCrops ]
+model : Location -> ( Model, Cmd Msg )
+model location =
+    let
+        currentRoute =
+            Routing.parseLocation location
+    in
+        Model emptyCropForm Empty currentRoute ! [ now, sendMessage RefreshCrops ]
 
 
 updateCrop : (CropForm -> CropForm) -> Model -> Model
@@ -86,6 +107,13 @@ updateCrop update model =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case (Debug.log "msg" msg) of
+        OnLocationChange location ->
+            let
+                newRoute =
+                    parseLocation location
+            in
+                ( { model | route = newRoute }, Cmd.none )
+
         Name name ->
             updateCrop (\cropForm -> { cropForm | name = name }) model ! []
 
@@ -189,13 +217,16 @@ encodeNewCrop cropForm =
         , ( "planted", Encode.string (or (Maybe.map formatDate cropForm.planted) "") )
         ]
 
+
 wrapResult : (Error -> b) -> (a -> b) -> Result Error a -> b
-wrapResult error success result = 
+wrapResult error success result =
     case result of
-      Ok value ->
-        success value
-      Err err ->
-        error err
+        Ok value ->
+            success value
+
+        Err err ->
+            error err
+
 
 getCrops : Cmd Msg
 getCrops =
@@ -274,10 +305,15 @@ deleteCrop crop =
 
 plantedDate : CropForm -> String
 plantedDate cropForm =
-     case (cropForm.plantedValue, (Maybe.map formatDate cropForm.planted)) of 
-        (Just date, _) -> date
-        (_, Just date) -> date
-        (_, _) -> ""
+    case ( cropForm.plantedValue, (Maybe.map formatDate cropForm.planted) ) of
+        ( Just date, _ ) ->
+            date
+
+        ( _, Just date ) ->
+            date
+
+        ( _, _ ) ->
+            ""
 
 
 cropFormView : CropForm -> Html Msg
@@ -371,7 +407,8 @@ view : Model -> Html Msg
 view model =
     div [ id "main" ]
         -- content
-        [ div [ class "pure-g" ]
+        [ MainView.navBar
+        , div [ class "pure-g" ]
             [ div [ class "pure-u-1-12" ] []
             , div [ class "pure-u-1-3" ]
                 [ (case model.crops of

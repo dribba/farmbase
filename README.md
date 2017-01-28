@@ -11,3 +11,8 @@ Crop tracking software I'll use to keep track of my garden at home.
     * Fertilizers
     * Harvest
 
+
+Build a timeline for each crop/group. 
+Allow to add pictures of the crop as part of the timeline.
+Allow multiple statistics, like PH, EC/PPM, additives
+
