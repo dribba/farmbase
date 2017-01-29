@@ -14,48 +14,27 @@ import Json.Encode as Encode
 import Json.Decode exposing (Decoder)
 import Json.Decode as Decode
 import Routing
-import MainView
 import Navigation exposing (Location)
 import Routing exposing (parseLocation)
+import Models.Crop exposing (..)
+import Models.Main exposing (..)
+import MainMessages exposing (..)
+import MainView exposing (mainView)
 
 
-subscriptions : Model -> Sub Msg
+subscriptions : Model -> Sub MainMessage
 subscriptions model =
     Sub.none
 
 
-main : Program Never Model Msg
+main : Program Never Model MainMessage
 main =
     Navigation.program OnLocationChange
         { init = model
-        , view = view
+        , view = mainView
         , update = update
         , subscriptions = subscriptions
         }
-
-
-type AsyncData b a
-    = Empty
-    | Loading
-    | Success a
-    | Error b
-
-
-type alias Crop =
-    { id : String
-    , name : String
-    , variety : String
-    , planted : Maybe Date
-    }
-
-
-type alias CropForm =
-    { name : String
-    , variety : String
-    , planted : Maybe Date
-    , plantedValue : Maybe String
-    , id : Maybe String
-    }
 
 
 emptyCropForm : CropForm
@@ -63,34 +42,7 @@ emptyCropForm =
     CropForm "" "" Nothing Nothing Nothing
 
 
-type Msg
-    = Name String
-    | Variety String
-    | Planted (Maybe Date)
-    | PlantedValue (Maybe String)
-    | Now
-    | RefreshCrops
-    | ReceiveCrops (List Crop)
-    | CropsError Error
-    | SaveCropForm
-    | CropSaved Crop
-    | CropSaveError Error
-    | RemoveCrop Crop
-    | CropRemoved
-    | CropRemoveError
-    | EditCrop Crop
-    | ResetCropForm
-    | OnLocationChange Location
-
-
-type alias Model =
-    { cropForm : CropForm
-    , crops : AsyncData Error (List Crop)
-    , route : Routing.Route
-    }
-
-
-model : Location -> ( Model, Cmd Msg )
+model : Location -> ( Model, Cmd MainMessage )
 model location =
     let
         currentRoute =
@@ -104,7 +56,7 @@ updateCrop update model =
     { model | cropForm = update model.cropForm }
 
 
-update : Msg -> Model -> ( Model, Cmd Msg )
+update : MainMessage -> Model -> ( Model, Cmd MainMessage )
 update msg model =
     case (Debug.log "msg" msg) of
         OnLocationChange location ->
@@ -195,7 +147,7 @@ sendMessage msg =
     msg |> Task.succeed |> Task.perform (always msg)
 
 
-now : Cmd Msg
+now : Cmd MainMessage
 now =
     Task.perform (always (Planted Nothing)) (Task.map (Just >> Planted) Date.now)
 
@@ -228,7 +180,7 @@ wrapResult error success result =
             error err
 
 
-getCrops : Cmd Msg
+getCrops : Cmd MainMessage
 getCrops =
     let
         url =
@@ -276,7 +228,7 @@ httpDelete decoder url =
         }
 
 
-createCrop : CropForm -> Cmd Msg
+createCrop : CropForm -> Cmd MainMessage
 createCrop cropForm =
     let
         url =
@@ -285,7 +237,7 @@ createCrop cropForm =
         Http.send (wrapResult CropSaveError CropSaved) (postJson decodeCrop url (cropForm |> encodeNewCrop))
 
 
-saveCrop : CropForm -> Cmd Msg
+saveCrop : CropForm -> Cmd MainMessage
 saveCrop cropForm =
     let
         url =
@@ -294,7 +246,7 @@ saveCrop cropForm =
         Http.send (wrapResult CropSaveError CropSaved) (putJson decodeCrop url (cropForm |> encodeNewCrop))
 
 
-deleteCrop : Crop -> Cmd Msg
+deleteCrop : Crop -> Cmd MainMessage
 deleteCrop crop =
     let
         url =
@@ -316,7 +268,7 @@ plantedDate cropForm =
             ""
 
 
-cropFormView : CropForm -> Html Msg
+cropFormView : CropForm -> Html MainMessage
 cropFormView cropForm =
     let
         isEdit =
@@ -380,7 +332,7 @@ listHeader =
         ]
 
 
-listRow : Crop -> Html Msg
+listRow : Crop -> Html MainMessage
 listRow ({ name, variety, planted } as crop) =
     tr []
         [ td [] [ text name ]
@@ -393,54 +345,11 @@ listRow ({ name, variety, planted } as crop) =
         ]
 
 
-cropTable : List Crop -> Html Msg
+cropTable : List Crop -> Html MainMessage
 cropTable crops =
     div []
         [ table [ class "pure-table pure-table-horizontal" ]
             [ listHeader
             , tbody [] (List.map listRow crops)
-            ]
-        ]
-
-
-view : Model -> Html Msg
-view model =
-    div [ id "main" ]
-        -- content
-        [ MainView.navBar
-        , div [ class "pure-g" ]
-            [ div [ class "pure-u-1-12" ] []
-            , div [ class "pure-u-1-3" ]
-                [ (case model.crops of
-                    Empty ->
-                        text "Loading..."
-
-                    Loading ->
-                        text "Loading..."
-
-                    Success crops ->
-                        cropTable crops
-
-                    Error e ->
-                        text "Oh no! There was an error :("
-                  )
-                , button [ title "Refresh", onClick RefreshCrops ] [ text "♻️" ]
-                ]
-            , div [ class "pure-u-1-12" ] []
-            , div [ class "pure-u-1-3 add-panel" ]
-                [ div [ class "pure-u-1-12" ] []
-                , div [ class "pure-u-11-12" ]
-                    [ cropFormView model.cropForm
-                    ]
-                ]
-            ]
-          -- debug model info
-        , div []
-            [ text
-                (if debug then
-                    toString model
-                 else
-                    ""
-                )
             ]
         ]
