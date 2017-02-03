@@ -12,7 +12,17 @@ Crop tracking software I'll use to keep track of my garden at home.
     * Harvest
 
 
-Build a timeline for each crop/group. 
-Allow to add pictures of the crop as part of the timeline.
+Build a timeline for each crop/group.  
+Allow to add pictures of the crop as part of the timeline.  
 Allow multiple statistics, like PH, EC/PPM, additives
 
+
+# TODO
+
+## Crops
+
+* [ ] Add crop screen
+  * [ ] Add crop form
+  * [ ] Add crop API endpoint
+* [ ] Design crop timeline
+* [ ] List crops

@@ -69,11 +69,11 @@ error =
     inContainer [ h1 [] [ text "Index" ] ]
 
 
-page : PageRoute -> Html MainMessage
-page route =
+page : Model -> PageRoute -> Html MainMessage
+page model route =
     case route of
         MyFarmPage myFarmRoute ->
-            myFarmView myFarmRoute
+            myFarmView model myFarmRoute
 
 
 mainView : Model -> Html MainMessage
@@ -92,11 +92,6 @@ mainView model =
                     error
 
                 Page route ->
-                    page route
+                    page model route
             ]
         ]
-
-
-
--- main =
---     div [ id "main" ]

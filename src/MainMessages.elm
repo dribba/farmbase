@@ -4,6 +4,11 @@ import Date exposing (Date)
 import Models.Crop exposing (Crop)
 import Http exposing (Error, Request)
 import Navigation exposing (Location)
+import Pages.MyFarm.Types exposing (MyFarmMessage)
+
+
+type PageMessage
+    = MyFarmMessage MyFarmMessage
 
 
 type MainMessage
@@ -23,4 +28,5 @@ type MainMessage
     | CropRemoveError
     | EditCrop Crop
     | ResetCropForm
+    | PageMessage PageMessage
     | OnLocationChange Location

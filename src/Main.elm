@@ -133,6 +133,9 @@ update msg model =
         RefreshCrops ->
             { model | crops = Loading } ! [ getCrops ]
 
+        PageMessage _ ->
+            model ! []
+
         Now ->
             ( model, now )
 
