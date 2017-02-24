@@ -10,7 +10,7 @@
   },
   "devDependencies": {},
   "scripts": {
-    "start": "watch 'elm-make src/Main.elm --output=backend/public/javascripts/build/main.js' src"
+    "start": "watch 'elm-make src/Main.elm --output=backend/public/javascripts/build/main.js --debug' src"
   },
   "author": "",
   "license": "ISC"

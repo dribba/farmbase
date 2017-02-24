@@ -24,5 +24,6 @@ Allow multiple statistics, like PH, EC/PPM, additives
 * [ ] Add crop screen
   * [ ] Add crop form
   * [ ] Add crop API endpoint
+  * [ ] Add crop form validation
 * [ ] Design crop timeline
 * [ ] List crops

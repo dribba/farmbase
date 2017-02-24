@@ -12,21 +12,16 @@ type PageMessage
 
 
 type MainMessage
-    = Name String
-    | Variety String
-    | Planted (Maybe Date)
-    | PlantedValue (Maybe String)
-    | Now
+    = Now
     | RefreshCrops
     | ReceiveCrops (List Crop)
-    | CropsError Error
-    | SaveCropForm
-    | CropSaved Crop
-    | CropSaveError Error
-    | RemoveCrop Crop
-    | CropRemoved
-    | CropRemoveError
-    | EditCrop Crop
-    | ResetCropForm
+      -- | CropSaved Crop
+      -- | SaveCropForm
+      -- | CropSaveError Error
+      -- | RemoveCrop Crop
+      -- | CropRemoved
+      -- | CropRemoveError
+      -- | EditCrop Crop
+      -- | ResetCropForm
     | PageMessage PageMessage
     | OnLocationChange Location

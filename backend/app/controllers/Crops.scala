@@ -6,11 +6,16 @@ import org.mongodb.scala._
 import org.mongodb.scala.model.Filters
 import play.api.libs.concurrent.Execution.Implicits.defaultContext
 import play.api.libs.functional.syntax._
+import utils.bson.Transformers._
+import utils.json.Writers._
 import play.api.libs.json._
 import play.api.mvc.{Action, Controller}
 import utils.json.Bson2Json
+import models.Crop
 
 import scala.concurrent.{Future, Promise}
+import scalaz.{Failure, Success}
+
 
 class Crops extends Controller {
 
@@ -48,43 +53,43 @@ class Crops extends Controller {
     })
   }
 
-  private val cropReads = (
-    (__ \ "name").read[String] and
-      (__ \ "variety").read[String] and
-      (__ \ "planted").read[DateTime]
-    ).tupled
-
-  private def crop(name: String, variety: String, planted: DateTime): Document =
+  private def toDocument(crop: Crop): Document =
     Document(
-      "name" -> name,
-      "variety" -> variety,
-      "planted" -> planted.toDate
+      "type" -> crop._type,
+      "variety" -> crop.variety,
+      "quantity" -> crop.quantity,
+      "media" -> crop.media,
+      "feeding" -> crop.feeding,
+      "_id" -> crop.id,
+      "started" -> crop.started
     )
 
   def add = Action.async(parse.json(2 * 1024)) { request =>
-    cropReads.reads(request.body) match {
-      case JsSuccess((name, variety, planted), _) =>
-        val doc = crop(name, variety, planted) + ("_id" -> ObjectId.get())
-        collection.insertOne(doc).toFuture().map(_ => {
-          Created(toJson(doc))
+    Crop.fromJson(request.body) match {
+      case Success(crop) =>
+        val newCrop = crop.copy(id = Some(ObjectId.get().toString))
+        collection.insertOne(toDocument(newCrop)).toFuture().map(_ => {
+          Created(Json.toJson(newCrop))
         })
 
-      case JsError(_) =>
-        Future.successful(BadRequest("Invalid request"))
+      case Failure(errors) =>
+        Future.successful(BadRequest(Json.toJson(errors)))
     }
   }
 
   def edit(id: String) = Action.async(parse.json(2 * 1024)) { request =>
-    cropReads.reads(request.body) match {
-      case JsSuccess((name, variety, planted), _) =>
-        val doc = crop(name, variety, planted)
-        def withId = Document("_id" -> new ObjectId(id))
-        collection.replaceOne(withId, doc).toFuture().map(_ => {
-          Accepted(toJson(doc ++ withId))
+    Crop.fromJson(request.body) match {
+      case Success(crop) =>
+        val docId = crop.id.getOrElse(ObjectId.get().toString)
+        val safeCrop = crop.copy(id = Some(docId))
+        def withId = Document("_id" -> docId)
+
+        collection.replaceOne(withId, toDocument(safeCrop)).toFuture().map(_ => {
+          Accepted(Json.toJson(safeCrop))
         })
 
-      case JsError(_) =>
-        Future.successful(BadRequest("Invalid request"))
+      case Failure(errors) =>
+        Future.successful(BadRequest(Json.toJson(errors)))
     }
   }
 

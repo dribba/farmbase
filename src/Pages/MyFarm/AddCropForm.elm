@@ -5,6 +5,7 @@ import Html.Attributes exposing (..)
 import Html.Events exposing (..)
 import MainMessages exposing (..)
 import Models.Main exposing (Model)
+import Models.Crop exposing (..)
 import Utils.Forms exposing (decodeInt)
 import Pages.MyFarm.Types exposing (..)
 import Json.Decode as Decode
@@ -15,9 +16,11 @@ cropTypeInput =
     div
         [ class "form-group" ]
         [ label
-            [ for "add-crop-crop-type" ]
+            [ class "control-label col-sm-2"
+            , for "add-crop-crop-type"
+            ]
             [ text "Crop type" ]
-        , div [ class "col-xs-12" ]
+        , div [ class "col-xs-10 col-md-4" ]
             [ input
                 [ type_ "text"
                 , id "add-crop-crop-type"
@@ -34,9 +37,11 @@ cropVarietyInput =
     div
         [ class "form-group" ]
         [ label
-            [ for "add-crop-crop-variety" ]
-            [ text "Crop type" ]
-        , div [ class "col-xs-12" ]
+            [ class "control-label col-sm-2"
+            , for "add-crop-crop-variety"
+            ]
+            [ text "Crop variety" ]
+        , div [ class "col-xs-10 col-md-4" ]
             [ input
                 [ type_ "text"
                 , id "add-crop-crop-variety"
@@ -53,9 +58,11 @@ cropQuantityInput =
     div
         [ class "form-group" ]
         [ label
-            [ for "add-crop-crop-qty" ]
-            [ text "Crop type" ]
-        , div [ class "col-xs-12" ]
+            [ class "control-label col-sm-2"
+            , for "add-crop-crop-qty"
+            ]
+            [ text "Quantity" ]
+        , div [ class "col-xs-10 col-md-4" ]
             [ input
                 [ type_ "number"
                 , id "add-crop-crop-qty"
@@ -68,15 +75,6 @@ cropQuantityInput =
         ]
 
 
-mediaTable =
-    Dict.fromList
-        [ ( "Hydroponics", Hydroponics )
-        , ( "Coco/Peat", CocoOrPeat )
-        , ( "Aeroponics", Aeroponics )
-        , ( "Soil", Soil )
-        ]
-
-
 mediaOptions : List String
 mediaOptions =
     [ "Select media" ] ++ List.sort (Dict.keys mediaTable)
@@ -86,13 +84,7 @@ toOption str =
     option [ value str ] [ text str ]
 
 
-cropMediaFromString : String -> Maybe CropMedia
-cropMediaFromString str =
-    Dict.get str mediaTable
-
-
-decodeCropMedia : Decode.Decoder AddCropFormMessage
-decodeCropMedia =
+decodeCropMediaUpd =
     Decode.map (cropMediaFromString >> CropMediaUpd) targetValue
 
 
@@ -100,12 +92,14 @@ cropMediaInput =
     div
         [ class "form-group" ]
         [ label
-            [ for "add-crop-crop-media" ]
+            [ class "control-label col-sm-2"
+            , for "add-crop-crop-media"
+            ]
             [ text "Media" ]
-        , div [ class "col-xs-12" ]
+        , div [ class "col-xs-10 col-md-4" ]
             [ select
                 [ id "add-crop-crop-media"
-                , on "change" decodeCropMedia
+                , on "change" decodeCropMediaUpd
                 , class "form-control"
                 ]
                 (mediaOptions
@@ -115,44 +109,46 @@ cropMediaInput =
         ]
 
 
-feedingTable =
-    Dict.fromList
-        [ ( "Fertilizer", Fertilizer )
-        , ( "Nutrients", Nutrients )
-        , ( "Compost", Compost )
-        ]
-
-
-feedingFromString : String -> Maybe FeedingType
-feedingFromString str =
-    Dict.get str feedingTable
-
-
-decodeFeeding : Decode.Decoder AddCropFormMessage
-decodeFeeding =
-    Decode.map (feedingFromString >> CropFeedingTypeUpd) targetValue
-
-
 feedingOptions : List String
 feedingOptions =
     [ "Select feeding" ] ++ List.sort (Dict.keys feedingTable)
+
+
+decodeFeedingTypeUpd =
+    Decode.map (feedingFromString >> CropFeedingTypeUpd) targetValue
 
 
 cropFeedingType =
     div
         [ class "form-group" ]
         [ label
-            [ for "add-crop-feeding" ]
+            [ class "control-label col-sm-2"
+            , for "add-crop-feeding"
+            ]
             [ text "Feeding" ]
-        , div [ class "col-xs-12" ]
+        , div [ class "col-xs-10 col-md-4" ]
             [ select
                 [ id "add-crop-feeding"
-                , on "change" decodeFeeding
+                , on "change" decodeFeedingTypeUpd
                 , class "form-control"
                 ]
                 (feedingOptions
                     |> List.map toOption
                 )
+            ]
+        ]
+
+
+submitButton =
+    div
+        [ class "form-group" ]
+        [ div [ class "col-xs-10 col-sm-offset-2" ]
+            [ button
+                [ type_ "button"
+                , class "btn btn-primary"
+                , onClick Submit
+                ]
+                [ text "Submit" ]
             ]
         ]
 
@@ -165,5 +161,5 @@ myFarmAddCropForm model =
         , cropQuantityInput
         , cropMediaInput
         , cropFeedingType
-        , button [ onClick Submit ] [ text "Submit" ]
+        , submitButton
         ]

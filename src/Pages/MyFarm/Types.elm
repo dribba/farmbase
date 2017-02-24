@@ -1,17 +1,15 @@
 module Pages.MyFarm.Types exposing (..)
 
-
-type CropMedia
-    = Hydroponics
-    | CocoOrPeat
-    | Aeroponics
-    | Soil
+import Models.Crop exposing (..)
+import Http
 
 
-type FeedingType
-    = Fertilizer
-    | Nutrients
-    | Compost
+type alias MyFarmModel =
+    { addCropForm : CropForm }
+
+
+emptyMyFarmModel =
+    { addCropForm = emptyCropForm }
 
 
 type AddCropFormMessage
@@ -20,6 +18,7 @@ type AddCropFormMessage
     | CropQtyUpd Int
     | CropMediaUpd (Maybe CropMedia)
     | CropFeedingTypeUpd (Maybe FeedingType)
+    | AddCropResponse (Result Http.Error Crop)
     | Submit
 
 

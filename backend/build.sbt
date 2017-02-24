@@ -12,6 +12,7 @@ libraryDependencies ++= Seq(
   jdbc,
   cache,
   ws,
+  "org.scalaz" %% "scalaz-core" % "7.2.8",
   "org.scalatestplus.play" %% "scalatestplus-play" % "1.5.1" % Test,
   mongoDriver
 )
